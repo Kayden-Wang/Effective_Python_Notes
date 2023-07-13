@@ -272,21 +272,346 @@ elif count := fresh_fruit.get('lemon', 0):
     to_enjoy = make_lemonade(count)
 else:
     to_enjoy = 'Nothing'
-
 ```
 
 ## Chapter Ⅱ: Lists and Dictionaries
 
-* Item 11: Know How to Slice Sequences
-* Item 12: Avoid Striding and Slicing in a Single Expression
-* Item 13: Prefer Catch-All Unpacking Over Slicing
-* Item 14: Sort by Complex Criteria Using the key Parameter
+### Item 11: Know How to Slice Sequences
 
-## Chapter Ⅲ: Functions 
+- 在切片时避免冗长，不要为开始索引提供0，或者为结束索引提供序列的长度。
+
+- 切片赋值将会替换原始序列中的该范围，即使长度不同。
+
+  ```python
+  a = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+  a[2:7] = [99, 22, 14]
+  # a 现在是 ['a', 'b', 99, 22, 14, 'h']
+  ```
+
+### Item 12: Avoid Striding and Slicing in a Single Expression
+
+Python有一种特殊的语法，能够在一个序列切片时设置步进，形式为somelist[start\:end:stride]。这让你可以在切片一个序列时，选择每n个项目。
+
+然而，问题在于步进语法往往会导致意料之外的行为，从而引入bug。例如，逆转一个字节字符串的常见Python技巧是用-1的步进对字符串进行切片。这在Unicode字符串上也能正确工作。但是当Unicode数据被编码为UTF-8字节字符串时，这将会出错
+
+```python
+w = '寿司'
+x = w.encode('utf-8')
+y = x[::-1]
+z = y.decode('utf-8')
+>>>
+Traceback ...
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xb8 in 
+position 0: invalid start byt
+```
+
+为了避免问题，建议避免在切片中同时使用步进以及开始和结束索引。如果必须使用步进，更推荐让步进保持为正值并省略开始和结束索引。如果必须使用步进和开始或结束索引，考虑使用一个赋值操作来进行步进，再用另一个赋值操作进行切片：
+
+```python
+y = x[::2]  # ['a', 'c', 'e', 'g']
+z = y[1:-1]  # ['c', 'e']
+```
+
+### Item 13: Prefer Catch-All Unpacking Over Slicing
+
+> 当将列表划分为不重叠的部分时，全面解包比切片和索引更不易出错。
+
+首先，解包在处理序列时可以提供更简洁和更易读的代码。通常，你需要知道你要解包的序列的长度，但是，Python 提供了一个所谓的"全面解包"功能，它通过使用星号表达式（*）来获取所有未匹配其他解包模式的值。例如
+
+```python
+car_ages_descending = [20, 19, 15, 9, 8, 7, 6, 4, 1, 0]
+oldest, second_oldest, *others = car_ages_descending
+print(oldest, second_oldest, others)
+```
+
+这种全面解包的方式，比索引和切片更简洁，更易读，且不会出现需要同步边界索引的易错性问题
+
+此外，星号表达式可以出现在任何位置，无论是在序列的起始、中间还是末尾，都可以使用它来获取所需的子序列。然而，你不能单独使用星号表达式，也不能在单层解包模式中使用多个星号表达式。
+
+星号表达式总是返回一个列表，如果序列中没有剩余的元素，它会返回一个空列表。当你知道序列至少有 N 个元素时，这一特性尤其有用。
+
+在处理迭代器时，你也可以使用解包语法。例如，你有一个生成器，它生成了一个 CSV 文件的所有行。使用索引和切片处理这个生成器的结果是可以的，但是需要多行代码并且视觉上较为嘈杂。使用星号表达式进行解包，可以很容易地将第一行（即头部）与迭代器的其他内容分开处理，这样做更为清晰：
+
+```python
+def generate_csv():
+    yield ('Date', 'Make' , 'Model', 'Year', 'Price')
+    # ...
+
+it = generate_csv()
+header, *rows = it
+print('CSV Header:', header)
+print('Row count: ', len(rows))
+```
+
+### Item 14: Sort by Complex Criteria Using the key Parameter
+
+- `sort()`方法可以用于根据自然排序来重新排列列表的内容。
+- 如果对象没有定义自然排序，`sort()`方法无法工作。
+- 可以使用`sort()`方法的`key`参数提供一个函数，该函数返回用于排序的值。
+- 通过从`key`函数返回元组，可以组合多个排序条件。可以使用一元减运算符来反转排序顺序。
+- 对于无法进行负运算的类型，可以通过多次调用`sort()`方法，并使用不同的`key`函数和`reverse`值来组合多个排序条件。
+
+> - Python的`list`类型提供了一个`sort()`方法用于根据各种标准对列表实例进行排序。默认情况下，`sort()`会按照列表项的自然升序排列。
+>
+> ```python
+> pythonCopy codenumbers = [93, 86, 11, 68, 70]
+> numbers.sort()
+> print(numbers)  # 输出：[11, 68, 70, 86, 93]
+> ```
+>
+> - 如果列表项是自定义对象，`sort()`方法可能无法工作，除非对象定义了自然排序。一种常见的做法是通过`sort()`方法的`key`参数来提供一个函数，这个函数会对每个列表项进行一些操作，返回一个可以进行自然排序的值。
+>
+> ```python
+> pythonCopy codeclass Tool:
+>     def __init__(self, name, weight):
+>         self.name = name
+>         self.weight = weight
+>     def __repr__(self):
+>         return f'Tool({self.name!r}, {self.weight})'
+> 
+> tools = [
+>     Tool('level', 3.5),
+>     Tool('hammer', 1.25),
+>     Tool('screwdriver', 0.5),
+>     Tool('chisel', 0.25),
+> ]
+> 
+> tools.sort(key=lambda x: x.name)
+> print(tools)  # 输出：[Tool('chisel', 0.25), Tool('hammer', 1.25), Tool('level', 3.5), Tool('screwdriver', 0.5)]
+> ```
+>
+> - `key`函数也可以用于对字符串进行转换操作，如将所有字符串转换为小写后再进行排序。
+>
+> ```python
+> pythonCopy codeplaces = ['home', 'work', 'New York', 'Paris']
+> places.sort(key=lambda x: x.lower())
+> print(places)  # 输出：['home', 'New York', 'Paris', 'work']
+> ```
+>
+> - 如果需要使用多个排序标准，可以返回一个包含所有排序标准的元组。这对于需要同时按照升序和降序排序的情况非常有用。
+>
+> ```python
+> pythonCopy codepower_tools = [
+>     Tool('drill', 4),
+>     Tool('circular saw', 5),
+>     Tool('jackhammer', 40),
+>     Tool('sander', 4),
+> ]
+> power_tools.sort(key=lambda x: (-x.weight, x.name))
+> print(power_tools)  # 输出：[Tool('jackhammer', 40), Tool('circular saw', 5), Tool('drill', 4), Tool('sander', 4)]
+> ```
+>
+> - 对于无法进行负值操作的类型，可以通过多次调用`sort()`方法并使用不同的`key`函数和`reverse`值来实现相同的效果。要注意的是，需要按照从最低等级排序到最高等级排序的顺序调用`sort()`方法。
+>
+> ```python
+> pythonCopy codepower_tools.sort(key=lambda x: x.name)  # 按名字升序排序
+> power_tools.sort(key=lambda x: x.weight, reverse=True)  # 按重量降序排序
+> print(power_tools)  # 输出：[Tool('jackhammer', 40), Tool('circular saw', 5), Tool('drill', 4), Tool('sander', 4)]
+> ```
+
+### Item 15: Be Cautious When Relying on dict Insertion Ordering
+
+在Python 3.5及之前的版本中，字典项的迭代顺序与插入顺序不一致，这是因为之前的字典类型通过使用内建的哈希函数和随机种子来实现哈希表算法，导致字典顺序不匹配插入顺序并在程序执行中随机混排。在Python 3.7及之后的版本中，字典会保持插入顺序，这意味着字典的打印顺序将始终与程序员最初创建的顺序相同。
+
+### Item 16: Prefer get Over in and KeyError toHandle Missing Dictionary Keys
+
+在Python中，常见的处理字典缺失键的方法有四种：使用in表达式，抛出KeyError异常，使用get方法，以及使用setdefault方法。
+
+① 使用in表达式：这种方式会检查键是否存在于字典中，如果存在则获取键的值，否则将键的值设置为默认值。
+
+```python
+pythonCopy codekey = 'wheat'
+if key in counters:
+ count = counters[key]
+else:
+ count = 0
+counters[key] = count + 1
+```
+
+② 抛出KeyError异常：如果尝试获取字典中不存在的键的值，Python会抛出KeyError异常。这种方式只需要访问一次键并进行一次赋值，所以相比使用in表达式更有效率。
+
+```python
+pythonCopy codekey = 'wheat'
+try:
+ count = counters[key]
+except KeyError:
+ count = 0
+counters[key] = count + 1
+```
+
+③ 使用get方法：get方法会尝试获取键的值，如果键不存在于字典中，则返回第二个参数作为默认值。使用get方法也只需要访问一次键并进行一次赋值，代码更简洁。
+
+```python
+pythonCopy codekey = 'wheat'
+count = counters.get(key, 0)
+counters[key] = count + 1
+```
+
+④ 使用setdefault方法：setdefault方法会尝试获取键的值，如果键不存在于字典中，会将键的值设为默认值，并返回键的值。这种方式可以使代码更短，但其方法名可能会导致理解上的困扰。
+
+```python
+pythonCopy codekey = 'brioche'
+who = 'Elmer'
+names = votes.setdefault(key, [])
+names.append(who)
+```
+
+虽然使用setdefault方法可以让代码更简短，但是这个方法并不总是最好的选择。这是因为setdefault方法会直接将默认值赋值给字典中的键，而不是复制一份。这可能导致意外的结果，尤其是当默认值是可变类型时。(但默认值是经典数值类型时比较不错)
+
+在字典值为简单类型（如计数器）时，使用get方法是最简洁和明了的选择。在字典值为复杂类型（如列表）时，可以使用Python 3.8引入的赋值表达式(海象表达式 Item 10)使代码更简洁。如果在使用setdefault方法时发现性能开销大或可能引发异常，应考虑使用collections模块的Counter类或defaultdict类。
+
+### Item 17: Prefer defaultdict Over setdefault toHandle Missing Items in Internal State
+
+你应该考虑在以下情况中使用 `defaultdict`：
+
+1. **当你需要字典的值是某种类型的集合（如list，set）并且你要对这些集合进行操作（例如添加元素）时。**在这种情况下，如果你使用常规的字典并尝试为一个不存在的键添加元素，你需要先检查键是否存在，如果不存在则先创建一个空集合。而`defaultdict`可以自动为你做这个。
+2. **当你创建一个需要管理任意潜在键的字典时。**默认字典会自动为任何你访问但不存在的键创建一个默认值。这可以减少检查键是否存在的代码，使得你的代码更简洁。
+3. **当你的字典需要一个不可变的默认值（如int，float）时。**这对于计数或计算总和非常有用。*<u>例如，如果你使用一个普通字典来计数，你需要先检查键是否存在，如果不存在，你需要设置默认值为0，然后再增加计数。`defaultdict(int)` 会自动将不存在的键的值设为0，你可以直接增加计数。</u>*
+
+总的来说, 当你发现自己在编写额外的代码来处理字典中不存在的键时，`defaultdict` 可能就是你需要的工具。
+
+> 1. 当你处理一个你没有创建的字典时，处理缺失键的方法有很多，`get`方法通常是比使用`in`表达式和`KeyError`异常更好的方法。然而，在一些使用情况下，`setdefault`看起来是最简洁的选项。
+> 2. 本文中的例子是在记录世界各国我访问过的城市。在这种情况下，可以用`setdefault`方法将新城市添加到集合中，无论该国家名是否已经在字典中。
+> 3. 但是，`setdefault`方法的名称可能让新读者感到困惑，难以立即理解代码的行为。而且，它的实现效率不高，因为它在每次调用时都会构造一个新的集合实例，无论给定的国家是否已经存在于数据字典中。
+> 4. Python的`collections`模块中的`defaultdict`类可以简化这个常见的用例，自动存储一个键不存在时的默认值。你只需要提供一个函数，每**次键丢失时，它都会返回默认值。**
+> 5. 使用`defaultdict`比使用`setdefault`更好，特别是在这种类型的情况下。当然，`defaultdict`也可能无法解决你的问题，但Python提供了更多的工具来解决这些限制。
+>
+> 让我们看下如何将`setdefault`改为使用`defaultdict`：
+>
+> 使用`setdefault`的代码：
+>
+> ```python
+> pythonCopy codeclass Visits:
+>     def __init__(self):
+>         self.data = {}
+> 
+>     def add(self, country, city):
+>         city_set = self.data.setdefault(country, set())
+>         city_set.add(city)
+> 
+> visits = Visits()
+> visits.add('Russia', 'Yekaterinburg')
+> visits.add('Tanzania', 'Zanzibar')
+> print(visits.data)
+> ```
+>
+> 改为使用`defaultdict`的代码：
+>
+> ```python
+> pythonCopy codefrom collections import defaultdict
+> 
+> class Visits:
+>     def __init__(self):
+>         self.data = defaultdict(set)
+> 
+>     def add(self, country, city):
+>         self.data[country].add(city)
+> 
+> visits = Visits()
+> visits.add('England', 'Bath')
+> visits.add('England', 'London')
+> print(visits.data)
+> ```
+>
+> 通过比较，你可以看到使用`defaultdict`的代码更简洁，运行效率更高。
+
+### Item 18: Know How to Construct Key-Dependent Default Values with \__missing__
+
+如何通过 `__missing__` 方法来处理字典中不存在的键。当你无法预先确定所有可能的键，或者**默认值依赖于键，或者计算默认值的代价很高**时，`__missing__` 方法会非常有用。
+
+在某些情况下，使用内置的`dict`类型的`setdefault`方法可以在处理缺失的键时使代码更短。在许多这样的情况下，更好的工具是使用内置模块`collections`的`defaultdict`类型。但是，有些时候，`setdefault`和`defaultdict`都不适合。
+
+例如，如果你正在编写一个管理文件系统上社交网络头像的程序，你需要一个字典来映射头像路径名到开放的文件句柄，以便你可以根据需要读取和写入这些图片。可以通过使用常规`dict`实例和使用`get`方法以及赋值表达式（在Python 3.8中引入）来检查键的存在。
+
+尝试使用`setdefault`方法和`defaultdict`都会遇到问题。在`setdefault`的例子中，即使路径已经在字典中，创建文件句柄的`open`函数也总是会被调用，这会导致一个额外的文件句柄，可能会与程序中已经打开的句柄冲突。
+
+```python
+try:
+ handle = pictures.setdefault(path, open(path, 'a+b'))
+except OSError:
+ print(f'Failed to open path {path}')
+ raise
+else:
+ handle.seek(0)
+ image_data = handle.read()
+```
+
+在`defaultdict`的例子中，问题在于`defaultdict`期望传递给它的函数不需要任何参数，这意味着`defaultdict`调用的辅助函数不知道哪个特定的键正在被访问，从而无法调用`open`。
+
+```python
+from collections import defaultdict
+def open_picture(profile_path):
+ try:
+ return open(profile_path, 'a+b')
+ except OSError:
+ print(f'Failed to open path {profile_path}')
+ raise
+pictures = defaultdict(open_picture)
+handle = pictures[path]
+handle.seek(0)
+image_data = handle.read()
+>>>
+Traceback ...
+TypeError: open_picture() missing 1 required positional 
+argument: 'profile_path'
+```
+
+幸运的是，Python提供了另一种内置的解决方案。你可以子类化`dict`类型，并实现`__missing__`特殊方法来添加处理**缺失键的自定义逻辑**。
+
+在以下代码示例中，我们将创建一个新的类，该类利用了上文定义的`open_picture`辅助方法：
+
+```python
+pythonCopy codeclass Pictures(dict):
+    def __missing__(self, key):
+        value = open_picture(key)
+        self[key] = value
+        return value
+
+pictures = Pictures()
+handle = pictures[path]
+handle.seek(0)
+image_data = handle.read()
+```
+
+在这个示例中，当`pictures[path]`字典访问发现路径键在字典中不存在时，`__missing__`方法被调用。这个方法必须为键创建新的默认值，将它插入到字典中，并返回给调用者。
+
+> - 当创建默认值的计算成本较高或可能引发异常时，`dict`的`setdefault`方法不适合使用。
+> - 传递给`defaultdict`的函数不能需要任何参数，这使得默认值不能依赖于正在访问的键。
+> - 你可以定义自己的`dict`子类，并用`__missing__`方法来构造必须知道正在访问哪个键的默认值。****
+
+## Chapter Ⅲ: Functions
+
+* Item 19: Never Unpack More Than Three Variables When Functions Return Multiple Values
+* Item 20: Prefer Raising Exceptions to Returning None
+* Item 21: Know How Closures Interact with Variable Scope
+* Item 22: Reduce Visual Noise with Variable Positional Arguments
+* Item 23: Provide Optional Behavior with Keyword Arguments
+* Item 24: Use None and Docstrings to Specify Dynamic Default Arguments
+* Item 25: Enforce Clarity with Keyword-Only andPositional-Only Arguments
+* Item 26: Define Function Decorators with functools.wraps 
 
 ## Chapter Ⅳ: Comprehensions and Generators 
 
+* Item 27: Use Comprehensions nstead of map and filter
+* Item 28: Avoid More Than Two Control Subexpressions inComprehensions
+* Item 29: Avoid Repeated Work in Comprehensions by UsingAssignment Expressions
+* Item 30: Consider Generators Instead of Returning Lists
+* Item 31: Be Defensive When Iterating Over Arguments
+* Item 32: Consider Generator Expressions for Large List Comprehensions
+* Item 33: Compose Multiple Generators with yield from
+* Item 34: Avoid Injecting Data into Generators with send
+* Item 35: Avoid Causing State Transitions inGenerators with throw
+* Item 36: Consider itertools for Working with Iteratorsand Generators
+
 ## Chapter Ⅴ: Classes and Interfaces 
+
+* Item 37: Compose Classes Instead of NestingMany Levels of Built-in Types
+* Item 38: Accept Functions Instead of Classes forSimple Interfaces
+* Item 39: Use @classmethod Polymorphism toConstruct Objects Generically
+* Item 40: Initialize Parent Classes with super
+* Item 41: Consider Composing Functionalitywith Mix-in Classes
+* Item 42: Prefer Public Attributes Over Private Ones
+* Item 43: Inherit from collections.abc forCustom Container Types
 
 ## Chapter Ⅵ: Metaclasses and Attributes
 
