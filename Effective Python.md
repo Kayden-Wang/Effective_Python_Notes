@@ -581,14 +581,392 @@ image_data = handle.read()
 
 ## Chapter Ⅲ: Functions
 
-* Item 19: Never Unpack More Than Three Variables When Functions Return Multiple Values
-* Item 20: Prefer Raising Exceptions to Returning None
-* Item 21: Know How Closures Interact with Variable Scope
-* Item 22: Reduce Visual Noise with Variable Positional Arguments
-* Item 23: Provide Optional Behavior with Keyword Arguments
-* Item 24: Use None and Docstrings to Specify Dynamic Default Arguments
-* Item 25: Enforce Clarity with Keyword-Only andPositional-Only Arguments
-* Item 26: Define Function Decorators with functools.wraps 
+### Item 19: Never Unpack More Than Three Variables When Functions Return Multiple Values
+
+当一个函数返回四个或更多的值时，这会变得复杂和容易出错。首先，所有返回的值都是数字，所以很容易在无意中改变它们的顺序。其次，解包的代码行会变得很长，可能需要以各种方式折行，这会降低代码的可读性。
+
+不要在解包时使用超过三个的变量。如果需要返回更多的值，最好定义一个轻量级的类或者 `namedtuple`，并让函数返回该类的实例。
+
+```python
+from collections import namedtuple
+
+Stats = namedtuple('Stats', ['minimum', 'maximum', 'average', 'median', 'count'])
+
+def get_stats(numbers):
+ minimum = min(numbers)
+ maximum = max(numbers)
+ count = len(numbers)
+ average = sum(numbers) / count
+ sorted_numbers = sorted(numbers)
+ middle = count // 2
+ if count % 2 == 0:
+   lower = sorted_numbers[middle - 1]
+   upper = sorted_numbers[middle]
+   median = (lower + upper) / 2
+ else:
+   median = sorted_numbers[middle]
+ return Stats(minimum, maximum, average, median, count)
+
+stats = get_stats(lengths)
+print(f'Min: {stats.minimum}, Max: {stats.maximum}')
+print(f'Average: {stats.average}, Median: {stats.median}, Count {stats.count}')
+```
+
+### Item 20: Prefer Raising Exceptions to Returning None
+
+在Python中，应该优先使用异常（Exceptions）而不是返回None来处理特殊情况。
+
+在具体代码实现中，返回None可能会导致错误，因为在条件表达式中，None和其他值（如零，空字符串）都会被解析为False。这可能会导致误解，比如一个函数返回了0，但在接下来的条件判断中，0和None都被当做False处理，导致程序错误
+
+函数的最终版本包括类型注解和docstring，明确了函数输入、输出，以及可能引发的异常，使得函数的使用更加清晰，减少了错误的可能性。
+
+```python
+def careful_divide(a: float, b: float) -> float:
+    """Divides a by b.
+    Raises:
+    ValueError: When the inputs cannot be divided.
+    """
+    try:
+        return a / b
+    except ZeroDivisionError as e:
+        raise ValueError('Invalid inputs')
+# 调用
+x, y = 5, 2
+try:
+    result = careful_divide(x, y)
+except ValueError:
+    print('Invalid inputs')
+else:
+    print('Result is %.1f' % result)
+```
+
+### Item 21: Know How `Closures` Interact with Variable Scope
+
+> Python 支持闭包，也就是说，函数可以引用在它们定义的作用域中的变量。例如，辅助函数`helper`能够访问`sort_priority`的参数`group`。
+>
+> Python中的函数是一等公民，这意味着你可以直接引用它们，将它们赋值给变量，将它们作为参数传递给其他函数，将它们用在表达式和if语句中等等。这就是`sort`方法可以接受一个闭包函数作为`key`参数的原因。
+
+> 然后，该段落进一步讨论了当闭包尝试修改其封闭作用域的变量时可能出现的问题。如果尝试在闭包内部改变在外部作用域定义的变量值，Python将会在闭包内部创建一个新的变量。这会导致外部作用域的变量值并未发生变化，就像`sort_priority2`函数中发生的情况。
+>
+> 为了解决这个问题，Python 提供了`nonlocal`语句，它使得在闭包内部可以修改封闭作用域的变量。但是，该段落也建议我们在使用`nonlocal`时要小心，因为`nonlocal`的副作用可能难以跟踪，尤其是在长函数中。
+>
+> 当你的`nonlocal`的使用开始变得复杂时，更好的选择是将你的状态封装在一个辅助类中。例如，在最后一个例子中，`Sorter`类完成了与使用`nonlocal`相同的结果，虽然代码略长，但易于阅读。
+>
+> ```python
+> # 基本的闭包使用
+> def sort_priority(values, group):
+>     def helper(x):
+>         if x in group:
+>             return (0, x)
+>         return (1, x)
+>     values.sort(key=helper)
+> 
+> numbers = [8, 3, 1, 2, 5, 4, 7, 6]
+> group = {2, 3, 5, 7}
+> sort_priority(numbers, group)
+> print(numbers)  # 输出：[2, 3, 5, 7, 1, 4, 6, 8]
+> 
+> 
+> # 尝试在闭包内修改外部作用域变量的错误示例
+> def sort_priority2(numbers, group):
+>     found = False
+>     def helper(x):
+>         if x in group:
+>             found = True
+>             return (0, x)
+>         return (1, x)
+>     numbers.sort(key=helper)
+>     return found
+> 
+> found = sort_priority2(numbers, group)
+> print('Found:', found)  # 输出：Found: False
+> print(numbers)  # 输出：[2, 3, 5, 7, 1, 4, 6, 8]
+> 
+> 
+> # 使用 nonlocal 的正确示例
+> def sort_priority3(numbers, group):
+>     found = False
+>     def helper(x):
+>         nonlocal found
+>         if x in group:
+>             found = True
+>             return (0, x)
+>         return (1, x)
+>     numbers.sort(key=helper)
+>     return found
+> 
+> found = sort_priority3(numbers, group)
+> print('Found:', found)  # 输出：Found: True
+> print(numbers)  # 输出：[2, 3, 5, 7, 1, 4, 6, 8]
+> 
+> 
+> # 使用类的更好示例
+> class Sorter:
+>     def __init__(self, group):
+>         self.group = group
+>         self.found = False
+> 
+>     def __call__(self, x):
+>         if x in self.group:
+>             self.found = True
+>             return (0, x)
+>         return (1, x)
+> 
+> sorter = Sorter(group)
+> numbers.sort(key=sorter)
+> assert sorter.found is True
+> ```
+
+### Item 22: Reduce Visual Noise with Variable Positional Arguments
+
+```python
+def log(message, *values):
+    if not values:
+    	print(message)
+    else:
+        values_str = ', '.join(str(x) for x in values)
+        print(f'{message}: {values_str}')
+
+log('My numbers are', 1, 2)
+log('Hi there')
+```
+
+### Item 23: Provide Optional Behavior with Keyword Arguments
+
+**可选的关键字参数应始终通过关键字而不是位置传递。**
+
+关键字参数有三个主要优点：
+
+- 提高代码可读性：对于新读者来说，关键字参数使函数调用更清晰。
+- 可以设置默认值：允许函数在你需要时提供额外功能，但是大多数时候你可以接受默认行为，避免代码重复和减少噪音。
+- 向后兼容性：关键字参数为扩展函数的参数提供了一种强大的方法，同时仍然保持与现有调用者的向后兼容性。这意味着你可以提供额外的功能而无需迁移大量现有的代码。
+
+> 如果你希望函数能接收任何命名的关键字参数，你可以使用**kwargs来收集那些参数。
+>
+> ```python
+> def print_parameters(**kwargs):
+>     for key, value in kwargs.items():
+>     	print(f'{key} = {value}')
+> print_parameters(alpha=1.5, beta=9, gamma=4)
+> ```
+
+### Item 24: Use None and Docstrings to Specify Dynamic Default Arguments
+
+在Python中，**函数的默认参数*(like {}, [], or datetime.now())*只会在模块加载时被计算一次**。这可能导致一些问题，尤其是当默认参数是动态的（例如，`datetime.now()`）时。默认参数的这种行为可能会与程序员的预期不符, 
+
+<u>因此，对于默认值是动态的情况，我们应该把默认参数设为`None`，然后在函数内部处理默认值的生成。在函数的文档字符串中，应该明确地说明默认参数的行为。</u>
+
+```python
+from typing import Optional
+def log_typed(message: str,
+    		when: Optional[datetime]=None) -> None:
+    """Log a message with a timestamp.
+    	Args:
+    	message: Message to print.
+    	when: datetime of when the message occurred.
+   		Defaults to the present time.
+    """
+    if when is None:
+    	when = datetime.now()
+    print(f'{when}: {message}')
+```
+
+
+
+> 例如，假设我们有一个记录日志的函数，我们希望它能在记录每个日志条目时都能记录当前时间。我们可能会尝试下面的方法：
+>
+> ```python
+> pythonCopy codefrom datetime import datetime
+> 
+> def log(message, when=datetime.now()):
+>     print(f'{when}: {message}')
+> ```
+>
+> 然而这种方法会导致所有的日志记录都有同样的时间戳，因为`datetime.now()`只在函数定义时被调用一次，之后就不会再变化了。
+>
+> 正确的做法是把默认参数设为`None`，然后在函数内部检查这个参数。如果这个参数为`None`，就生成一个新的默认值。例如：
+>
+> ```python
+> pythonCopy codefrom datetime import datetime
+> 
+> def log(message, when=None):
+>     """Log a message with a timestamp.
+> 
+>     Args:
+>     message: Message to print.
+>     when: datetime of when the message occurred.
+>     Defaults to the present time.
+>     """
+>     if when is None:
+>         when = datetime.now()
+>     print(f'{when}: {message}')
+> ```
+>
+> 同样的，对于默认参数是可变的（例如，字典或列表）的情况，也应该用同样的方法处理。因为如果一个函数的默认参数是可变的，那么这个参数在所有的函数调用中都是共享的。例如：
+>
+> ```python
+> pythonCopy codeimport json
+> 
+> def decode(data, default={}):
+>     try:
+>         return json.loads(data)
+>     except ValueError:
+>         return default
+> ```
+>
+> 这个函数在遇到无法解析的数据时，会返回同一个默认字典，这可能导致非常奇怪的结果。正确的做法是把默认参数设为`None`，然后在函数内部生成一个新的默认值：
+>
+> ```python
+> pythonCopy codeimport json
+> 
+> def decode(data, default=None):
+>     """Load JSON data from a string.
+> 
+>     Args:
+>     data: JSON data to decode.
+>     default: Value to return if decoding fails.
+>     Defaults to an empty dictionary.
+>     """
+>     try:
+>         return json.loads(data)
+>     except ValueError:
+>         if default is None:
+>             default = {}
+>         return default
+> ```
+
+### Item 25: Enforce Clarity with Keyword-Only and Positional-Only Arguments
+
+- **关键字参数 (Keyword Arguments)**: Python 允许你使用关键字参数在函数调用时指定某些参数的值。这增加了代码的可读性，因为调用者可以清楚地看到每个参数的名称和传递的值。此外，关键字参数也可以有默认值，这使得这些参数在调用函数时可以是可选的。
+- **关键字只参数 (Keyword-Only Arguments)**: 在函数定义中，参数列表中的 `*` 后的参数是关键字只参数，意味着它们只能通过关键字来提供，而不能通过位置。这样可以确保调用者在使用函数时清晰地了解他们的意图。
+- **位置只参数 (Positional-Only Arguments)**: 在Python 3.8中，引入了位置只参数的概念。函数定义中参数列表的 `/` 之前的参数是位置只参数，它们只能通过位置提供，而不能通过关键字。这可以减少调用者对参数名称的依赖，使得我们可以在不影响现有调用者的情况下更改参数名称。
+
+```python
+# 使用关键字参数和默认值
+def safe_division_b(number, divisor, ignore_overflow=False, ignore_zero_division=False):
+    try:
+        return number / divisor
+    except OverflowError:
+        if ignore_overflow:
+            return 0
+        else:
+            raise
+    except ZeroDivisionError:
+        if ignore_zero_division:
+            return float('inf')
+        else:
+            raise
+
+# 使用关键字只参数
+def safe_division_c(number, divisor, *, ignore_overflow=False, ignore_zero_division=False):
+    try:
+        return number / divisor
+    except OverflowError:
+        if ignore_overflow:
+            return 0
+        else:
+            raise
+    except ZeroDivisionError:
+        if ignore_zero_division:
+            return float('inf')
+        else:
+            raise
+
+# 使用位置只参数
+def safe_division_d(numerator, denominator, /, *, ignore_overflow=False, ignore_zero_division=False):
+    try:
+        return numerator / denominator
+    except OverflowError:
+        if ignore_overflow:
+            return 0
+        else:
+            raise
+    except ZeroDivisionError:
+        if ignore_zero_division:
+            return float('inf')
+        else:
+            raise
+
+# 在参数列表中的 / 和 * 之间的参数可以通过位置或关键字提供
+def safe_division_e(numerator, denominator, /, ndigits=10, *, ignore_overflow=False, ignore_zero_division=False):
+    try:
+        fraction = numerator / denominator
+        return round(fraction, ndigits)
+    except OverflowError:
+        if ignore_overflow:
+            return 0
+        else:
+            raise
+    except ZeroDivisionError:
+        if ignore_zero_division:
+            return float('inf')
+        else:
+            raise
+
+```
+
+### Item 26: Define Function Decorators with functools.wraps 
+
+装饰器是Python中一种特殊的语法，能在函数执行前后插入额外的代码。装饰器可以访问并修改输入参数、返回值和抛出的异常，对于强制语义、调试、注册函数等有很大的帮助。
+
+举例来说，我们可以使用装饰器打印函数调用的参数和返回值。这在调试递归函数的函数调用堆栈时非常有用。可以通过使用 *args 和 **kwargs 将所有参数传递给被装饰的函数，下面给出一个示例：
+
+```python
+pythonCopy codedef trace(func):
+ def wrapper(*args, **kwargs):
+     result = func(*args, **kwargs)
+     print(f'{func.__name__}({args!r}, {kwargs!r}) '
+           f'-> {result!r}')
+     return result
+ return wrapper
+```
+
+使用 `@` 符号应用此装饰器到一个函数：
+
+```python
+pythonCopy code@trace
+def fibonacci(n):
+    """Return the n-th Fibonacci number"""
+    if n in (0, 1):
+        return n
+    return (fibonacci(n - 2) + fibonacci(n - 1))
+```
+
+这种方法在打印每一级递归调用的参数和返回值时非常有用。但这也带来了一种副作用，即装饰器返回的函数名与原函数名不同。这可能会影响到执行自省（introspection）的工具，如调试器。
+
+如 `help(fibonacci)` `pickle.dumps(fibonacci)` 等
+
+为了解决这个问题，我们可以使用functools模块中的 `wraps` 助手函数。这是一个帮助你编写装饰器的装饰器。当你将其应用到包装器函数时，它会将内部函数的所有重要元信息复制到外部函数：
+
+```python
+pythonCopy codefrom functools import wraps
+
+def trace(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        # do something before the function call
+        result = func(*args, **kwargs)
+        # do something after the function call
+        print(f'{func.__name__}({args!r}, {kwargs!r}) '
+              f'-> {result!r}')
+        return result
+    return wrapper
+
+@trace
+def fibonacci(n):
+    """Return the n-th Fibonacci number"""
+    if n in (0, 1):
+        return n
+    return (fibonacci(n - 2) + fibonacci(n - 1))
+```
+
+使用 wraps 装饰器可以确保函数元数据的正确传递，从而避免在使用一些执行自省的工具时出现异常。
+
+总结一下，要点如下：
+
+- Python的装饰器是一种运行时修改函数的语法。
+- 使用装饰器可能会导致一些执行自省的工具出现异常行为。
+- 当你定义自己的装饰器时，使用functools模块的wraps装饰器可以避免这些问题。
 
 ## Chapter Ⅳ: Comprehensions and Generators 
 
