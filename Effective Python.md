@@ -970,11 +970,236 @@ def fibonacci(n):
 
 ## Chapter Ⅳ: Comprehensions and Generators 
 
-* Item 27: Use Comprehensions nstead of map and filter
-* Item 28: Avoid More Than Two Control Subexpressions inComprehensions
-* Item 29: Avoid Repeated Work in Comprehensions by UsingAssignment Expressions
-* Item 30: Consider Generators Instead of Returning Lists
-* Item 31: Be Defensive When Iterating Over Arguments
+许多程序都是围绕处理列表、字典键值对和集合构建的。Python提供了一种特殊的语法，称为**推导式**，用于简洁地迭代这些类型并创建衍生数据结构。推导式可以显著提高执行这些常见任务的代码的可读性，并提供许多其他优势。
+
+这种处理方式还可以扩展到具有生成器的函数上，生成器可以逐步返回函数的值流。调用生成器函数的结果可以在适当的任何地方使用迭代器（例如，用于循环、星号表达式）。生成器可以提高性能，减少内存使用量，并提高可读性。
+
+### Item 27: Use Comprehensions nstead of map and filter
+
+- 列表推导式比map和filter函数更清晰，因为它们不需要lambda表达式。
+- 列表推导式允许你轻松地从输入列表中跳过项目，这是map函数在没有filter函数帮助的情况下无法实现的。
+- 字典和集合也可以使用推导式来创建。
+
+列表推导式是一种从其他序列派生新列表的简洁语法。比如，你想计算一个列表中每个数字的平方，你可以通过一个简单的for循环实现：
+
+```python
+pythonCopy code
+a = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+squares = []
+for x in a:
+    squares.append(x**2)
+print(squares)
+# 输出：[1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
+```
+
+但使用列表推导式，你可以在一行代码内完成同样的事情：
+
+```python
+pythonCopy codesquares = [x**2 for x in a]
+print(squares)
+# 输出：[1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
+# Or
+alt = map(lambda x: x ** 2, a)
+```
+
+列表推导式比map函数更清晰，特别是在进行的不只是一个单参数函数操作时。map函数需要创建一个lambda函数进行计算，这在视觉上比较杂乱。
+
+此外，列表推导式还可以很容易地过滤输入列表的项目，移除结果中的相应输出。如下所示，可以在列表推导式的循环后添加条件表达式来实现：
+
+```python
+pythonCopy codeeven_squares = [x**2 for x in a if x % 2 == 0]
+print(even_squares)
+# 输出：[4, 16, 36, 64, 100]
+# V.S.
+alt = map(lambda x: x**2, filter(lambda x: x % 2 == 0, a))
+```
+
+相比之下，使用map和filter函数来实现相同的效果会更难阅读。
+
+字典和集合也有自己的推导式（字典推导式和集合推导式），这使得在编写算法时很容易创建其他类型的派生数据结构：
+
+```python
+pythonCopy codeeven_squares_dict = {x: x**2 for x in a if x % 2 == 0}
+threes_cubed_set = {x**3 for x in a if x % 3 == 0}
+print(even_squares_dict)
+print(threes_cubed_set)
+# 输出：
+# {2: 4, 4: 16, 6: 36, 8: 64, 10: 100}
+# {216, 729, 27}
+```
+
+### Item 28: Avoid More Than Two Control Subexpressions inComprehensions
+
+在 Python 中，理解表达式（Comprehensions）是一种语法糖，可以让我们用一行代码就能完成原本需要多行才能完成的循环操作。例如，如果我们想要将一个二维列表（也可以看作是矩阵）中的所有元素放入一个新的一维列表中，可以使用包含两个 for 子表达式的列表理解：
+```python
+matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+flat = [x for row in matrix for x in row]
+```
+
+另一个例子是，如果我们想要计算矩阵中每个元素的平方，我们可以使用嵌套的列表理解：
+```python
+squared = [[x**2 for x in row] for row in matrix]
+```
+
+然而，如果理解表达式中包含的控制子表达式超过两个，那么它们将变得很难理解，可能会降低代码的可读性。例如：
+```python
+my_lists = [
+ [[1, 2, 3], [4, 5, 6]],
+ ...
+]
+flat = [x for sublist1 in my_lists for sublist2 in sublist1 for x in sublist2]
+```
+在这种情况下，使用常规的循环和 if 语句，可能会更清晰：
+```python
+flat = []
+for sublist1 in my_lists:
+ for sublist2 in sublist1:
+ flat.extend(sublist2)
+```
+
+此外，理解表达式也支持多个 if 条件，如果多个条件在同一层循环，它们之间有一个隐式的 and 表达式：
+```python
+a = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+b = [x for x in a if x > 4 if x % 2 == 0]
+c = [x for x in a if x > 4 and x % 2 == 0] # b 和 c 是等价的
+```
+
+最后，如果理解表达式过于复杂，应该避免使用。更好的选择是使用常规的循环和条件语句，或者写一个帮助函数。
+
+### Item 29: Avoid Repeated Work in Comprehensions by Using Assignment Expressions
+
+关于在Python的comprehensions中避免重复计算的方法，使用Python 3.8引入的“海象运算符”（:=）来创建赋值表达式。
+
+比如，在处理一个订单管理程序的情况下，我们需要重复引用同一个计算，我们需要找出库存中哪些订单可以被批量完成。在此情况下，我们可以使用字典推导式来避免重复的计算，但是这会导致一些可读性和一致性的问题。
+
+下面是原始代码：
+```python
+stock = {
+ 'nails': 125,
+ 'screws': 35,
+ 'wingnuts': 8,
+ 'washers': 24,
+}
+order = ['screws', 'wingnuts', 'clips']
+
+def get_batches(count, size):
+ return count // size
+
+result = {}
+for name in order:
+ count = stock.get(name, 0)
+ batches = get_batches(count, 8)
+ if batches:
+ result[name] = batches
+
+print(result)
+```
+
+而使用字典推导式的代码如下：
+```python
+found = {name: get_batches(stock.get(name, 0), 8)
+ for name in order
+ if get_batches(stock.get(name, 0), 8)}
+
+print(found)
+```
+
+这段代码虽然更简洁，但是`get_batches(stock.get(name, 0), 8)`的表达式被重复了，这增加了阅读困难，并可能引入错误。为了避免这种问题，我们可以使用赋值表达式(`:=`运算符)，这将允许我们在单次循环中进行一次计算并存储其结果，然后在其他地方再次引用该变量，而不是重新计算。下面是修改后的代码：
+
+```python
+found = {name: batches for name in order
+ if (batches := get_batches(stock.get(name, 0), 8))}
+
+print(found)
+```
+
+这样，对于`get_batches`和`stock.get`的调用只进行了一次，不仅使代码更简洁，而且也提高了性能。
+
+但是，作者也警告说，在赋值表达式在理解推导式的值部分被定义并在其他部分被引用时，可能会出现运行时错误。此外，如果在推导式中使用了赋值表达式，并且没有条件语句，那么循环变量就会泄漏到包含的作用域中，这通常是我们要避免的。
+
+最后，这篇文章也提到，赋值表达式在生成器表达式中也能同样工作。
+
+总的来说，主要的观点是：
+
+- 赋值表达式可以使得推导式和生成器表达式在同一推导式中重用一个条件的值，这可以提高可读性和性能。
+- 尽管可以在推导式或生成器表达式的条件之外使用赋值表达式，但应避免这样做。
+
+### Item 30: Consider Generators Instead of Returning Lists
+
+这个段落主要在讨论 Python 中列表与生成器的使用差异以及各自的优点。特别强调了在处理大量数据或需要产生序列数据时，选择使用生成器可能会更好。
+
+首先，作者通过一个示例函数 `index_words`，展示了使用列表来保存和返回函数结果的一般方法。然后指出了这种方法的两个问题：
+
+1. 代码相对密集和嘈杂，列表的 `append` 方法在每次找到新的结果时都需要被调用，这可能导致代码阅读困难。
+2. 该函数要求在返回结果前，所有的结果必须存储在列表中。对于大数据输入，这可能会导致程序运行内存不足并崩溃。
+
+然后，作者介绍了生成器的概念和用法，通过使用 `yield` 表达式的生成器函数，可以逐个产生结果，而不需要一次性生成所有的结果。
+
+最后，作者使用一个文件读取的例子进一步展示了生成器如何处理大规模数据。在这个例子中，生成器每次只处理一行输入数据，并产生一个输出，这极大地降低了内存使用。
+
+然而，作者也提醒我们，使用生成器的时候需要注意，生成器返回的迭代器是有状态的，不能重复使用。
+
+下面是段落中的代码示例：
+
+1. 列表的用法：
+
+    ```python
+    def index_words(text):
+        result = []
+        if text:
+            result.append(0)
+        for index, letter in enumerate(text):
+            if letter == ' ':
+                result.append(index + 1)
+        return result
+    address = 'Four score and seven years ago...'
+    result = index_words(address)
+    print(result[:10])  # [0, 5, 11, 15, 21, 27, 31, 35, 43, 51]
+    ```
+
+2. 使用生成器的方式：
+
+    ```python
+    def index_words_iter(text):
+        if text:
+            yield 0
+        for index, letter in enumerate(text):
+            if letter == ' ':
+                yield index + 1
+    it = index_words_iter(address)
+    print(next(it))  # 0
+    print(next(it))  # 5
+    result = list(index_words_iter(address))
+    print(result[:10])  # [0, 5, 11, 15, 21, 27, 31, 35, 43, 51]
+    ```
+
+3. 使用生成器处理大规模数据：
+
+    ```python
+    def index_file(handle):
+        offset = 0
+        for line in handle:
+            if line:
+                yield offset
+            for letter in line:
+                offset += 1
+                if letter == ' ':
+                    yield offset
+    import itertools
+    with open('address.txt', 'r') as f:
+        it = index_file(f)
+        results = itertools.islice(it, 0, 10)
+        print(list(results))  # [0, 5, 11, 15, 21, 27, 31, 35, 43, 51]
+    ```
+
+关键点总结：
+
+- 使用生成器比函数返回累积结果的列表更清晰。
+- 生成器返回的迭代器产生的是生成器函数体内 `yield` 表达式传递的值集。
+- 生成器可以为任意大的输入产生输出序列，因为其工作内存不包含所有的输入和输出。
+
+### Item 31: Be Defensive When Iterating Over Arguments
+
 * Item 32: Consider Generator Expressions for Large List Comprehensions
 * Item 33: Compose Multiple Generators with yield from
 * Item 34: Avoid Injecting Data into Generators with send
