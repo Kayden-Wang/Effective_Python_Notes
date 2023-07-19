@@ -2679,7 +2679,785 @@ tree = SequenceNode(
 print('Tree length is', len(tree))  # 输出：Tree length is 7
 ```
 
-## Chapter Ⅵ: Metaclasses and Attributes
+## Chapter Ⅵ: Metaclasses and Attributes  
+
+Python的元类（Metaclasses）和动态属性（Dynamic Attributes）。
+
+元类是Python的一个重要特性，它允许你在定义类时拦截Python的class声明，并提供特殊的行为。Python的动态属性让你能够自定义属性访问。这些特性能够帮助你从简单类平滑过渡到复杂类。但是，这些强大的特性也带来了很多陷阱，如动态属性可能会导致对象被覆盖和产生意想不到的副作用，元类可能会导致极其奇怪的行为，对新手来说难以理解。因此，你应遵循最少惊奇原则，只在实现众所周知的惯用法时使用这些机制。
+
+① 动态属性示例：
+
+```python
+class DynamicAttributeClass:
+    def __init__(self):
+        self._attribute = "default"
+
+    @property
+    def attribute(self):
+        return self._attribute
+
+    @attribute.setter
+    def attribute(self, value):
+        self._attribute = value
+
+
+dynamic_instance = DynamicAttributeClass()
+print(dynamic_instance.attribute)  # 输出: default
+
+dynamic_instance.attribute = "Changed"
+print(dynamic_instance.attribute)  # 输出: Changed
+```
+
+这段代码展示了如何使用Python的动态属性特性，可以在运行时动态修改类的属性。
+
+② 元类示例：
+
+```python
+class Meta(type):
+    def __init__(cls, name, bases, attrs):
+        print('Creating class:', name)
+        super().__init__(name, bases, attrs)
+
+class MyClass(metaclass=Meta):
+    pass
+
+# 输出: Creating class: MyClass
+```
+
+这段代码展示了如何使用Python的元类特性，通过拦截类的创建过程，我们可以在类创建时插入自定义的行为。
+
+应用场景及应用原因总结:
+
+① 动态属性可以用于创建灵活的API，这些API可以在运行时改变其行为。例如，Django模型和Tensorflow张量等使用了这个特性。
+
+② 元类可以用于多种场景，包括在类创建时自动注册类，验证类定义，以及自动添加类属性和方法等。例如，Django ORM就使用了元类来将类与数据库表关联。
+
+应用这些特性的主要原因是为了提高代码的灵活性和可复用性，同时减少代码的冗余。但是，由于它们增加了代码的复杂性，因此应谨慎使用。
+
+用代码段:
+
+```python
+pythonCopy codeclass Meta(type):
+    def __init__(cls, name, bases, attrs):
+        print('Creating class:', name)
+        super().__init__(name, bases, attrs)
+
+class MyClass(metaclass=Meta):
+    pass
+
+class DynamicAttributeClass:
+    def __init__(self):
+        self._attribute = "default"
+
+    @property
+    def attribute(self):
+        return self._attribute
+
+    @attribute.setter
+    def attribute(self, value):
+        self._attribute = value
+
+dynamic_instance = DynamicAttributeClass()
+dynamic_instance.attribute = "Changed"
+```
+
+### Item 44: Use Plain Attributes Instead of Setter andGetter Methods
+
+1. 段落摘要总结：
+
+   这段文字主要讲述了在Python中不需要实现显式的setter和getter方法。取而代之，应始终从简单的公共属性开始实现。并且，如果后续需要在设置属性时添加特殊行为，可以迁移到@property装饰器及其相应的setter属性。另外，还可以使用@property让父类的属性变为不可变，以及进行一些类型检查和验证。最后，应避免在getter和setter方法中执行其他不可预期的副作用操作。
+
+2. 代码演示及逐步理解：
+
+   ①首先是旧式的方式，使用显式的getter和setter方法：
+   
+   ```python
+   class OldResistor:
+       def __init__(self, ohms):
+           self._ohms = ohms
+
+       def get_ohms(self):
+           return self._ohms
+
+       def set_ohms(self, ohms):
+           self._ohms = ohms
+
+   r0 = OldResistor(50e3)
+   print('Before:', r0.get_ohms())
+   r0.set_ohms(10e3)
+   print('After: ', r0.get_ohms())
+   ```
+   
+   输出：
+
+   ```
+   Before: 50000.0
+   After: 10000.0
+   ```
+
+   ②然后是使用Python的方式，直接使用属性：
+
+   ```python
+   class Resistor:
+       def __init__(self, ohms):
+           self.ohms = ohms
+           self.voltage = 0
+           self.current = 0
+
+   r1 = Resistor(50e3)
+   r1.ohms = 10e3
+   r1.ohms += 5e3
+   print('After: ', r1.ohms)
+   ```
+   
+   输出：
+
+   ```
+   After: 15000.0
+   ```
+
+   ③使用@property装饰器和setter方法来添加特殊行为：
+
+   ```python
+   class VoltageResistance(Resistor):
+       def __init__(self, ohms):
+           super().__init__(ohms)
+           self._voltage = 0
+
+       @property
+       def voltage(self):
+           return self._voltage
+
+       @voltage.setter
+       def voltage(self, voltage):
+           self._voltage = voltage
+           self.current = self._voltage / self.ohms
+
+   r2 = VoltageResistance(1e3)
+   print(f'Before: {r2.current:.2f} amps')
+   r2.voltage = 10
+   print(f'After: {r2.current:.2f} amps')
+   ```
+   
+   输出：
+
+   ```
+   Before: 0.00 amps
+   After: 0.01 amps
+   ```
+   
+   ④使用setter进行类型检查和验证：
+
+   ```python
+   class BoundedResistance(Resistor):
+       def __init__(self, ohms):
+           super().__init__(ohms)
+           self._ohms = ohms
+
+       @property
+       def ohms(self):
+           return self._ohms
+
+       @ohms.setter
+       def ohms(self, ohms):
+           if ohms <= 0:
+               raise ValueError(f'ohms must be > 0; got {ohms}')
+           self._ohms = ohms
+
+   r3 = BoundedResistance(1e3)
+   try:
+       r3.ohms = 0
+   except ValueError as e:
+       print(e)
+   ```
+   
+   输出：
+
+   ```
+   ohms must be > 0; got 0
+   ```
+
+   ⑤使用@property使得属性不可变：
+
+   ```python
+   class FixedResistance(Resistor):
+       def __init__(self, ohms):
+           super().__init__(ohms)
+           self._ohms = ohms
+
+       @property
+       def ohms(self):
+           return self._ohms
+
+       @ohms.setter
+       def ohms(self, ohms):
+           if hasattr(self, '_ohms'):
+               raise AttributeError("Ohms is immutable")
+           self._ohms = ohms
+
+   r4 = FixedResistance(1e3)
+   try:
+       r4.ohms = 2e3
+   except AttributeError as e:
+       print(e)
+   ```
+   
+   输出：
+
+   ```
+   Ohms is immutable
+   ```
+
+3. 方法应用场景及应用原因总结：
+
+   - 应用原因：使用@property能够实现对属性值的控制，包括类型检查、范围限制等。此外，还能实现当属性值改变时触发特定的行为，如更新其他属性等。
+
+   - 常见应用场景：常用于实现只读属性，或者在设置属性值时要触发某些操作的情况。例如，在设计模型时，当属性值改变需要更新其他依赖此属性的属性时，可以用@property来实现。
+
+4. 实用代码段：
+   
+   ```python
+   class Resistor:
+       def __init__(self, ohms):
+           self._ohms = ohms
+           self.voltage = 0
+           self.current = 0
+   
+       @property
+       def ohms(self):
+           return self._ohms
+   
+       @ohms.setter
+       def ohms(self, ohms):
+           if ohms <= 0:
+               raise ValueError(f'ohms must be > 0; got {ohms}')
+           self._ohms = ohms
+   ```
+   
+   这段代码定义了一个电阻类，使用@property装饰器限制了电阻值必须大于0，否则会抛出错误。
+
+### Item 45: Consider @property Instead of Refactoring Attributes
+
+> `__repr__` 是 Python 中的一个特殊方法（special method），用于定义对象的字符串表示形式。它返回一个字符串，用于表示对象的详细信息，通常用于调试和开发过程中。
+>
+> 当你在交互式环境中输出一个对象时，实际上会调用该对象的 `__repr__` 方法来获取其字符串表示形式。也可以使用 `repr()` 函数显式地调用 `__repr__` 方法来获取对象的字符串表示。
+>
+> 例如，如果你定义了一个名为 `Person` 的类，并为其定义了 `__repr__` 方法，你可以通过在对象上调用 `repr()` 或直接输出对象来获取其字符串表示形式。
+>
+> ```python
+> class Person:
+>     def __init__(self, name, age):
+>         self.name = name
+>         self.age = age
+>     
+>     def __repr__(self):
+>         return f"Person(name='{self.name}', age={self.age})"
+> 
+> person = Person("Alice", 25)
+> print(person)  # 输出: Person(name='Alice', age=25)
+> print(repr(person))  # 输出: Person(name='Alice', age=25)
+> ```
+>
+> 在上面的示例中，`__repr__` 方法返回了一个以类名为前缀的字符串，包含了对象的属性信息。这样做可以方便地查看对象的详细信息，有助于调试和理解程序的运行。
+
+1. **段落摘要总结**
+
+   本文是关于Python中的@property装饰器的讨论，它允许你在获取和设置属性时添加额外的行为。作者首先介绍了“漏桶算法”，该算法表示某种配额，一旦“桶”满了，这个配额就不能从一个时期延续到下一个时期。然而，原始的漏桶实现有一个问题：当配额为零时，无法知道“桶”开始时的配额是多少。作者使用@property来解决这个问题，通过新增的两个属性来跟踪最大配额和消耗的配额，并通过@property计算当前配额。最后，作者强调，在大规模使用@property时，应该考虑重构代码，以优化设计。
+
+2. **段落行文逻辑与代码**
+
+   - **原始Bucket类和其漏桶算法**
+     
+     首先，作者提出了Bucket类的问题：你不知道“桶”开始时的配额是多少。以下是Bucket类的代码：
+
+     ```python
+     from datetime import datetime, timedelta
+     
+     class Bucket:
+         def __init__(self, period):
+             self.period_delta = timedelta(seconds=period)
+             self.reset_time = datetime.now()
+             self.quota = 0
+     
+         def __repr__(self):
+             return f'Bucket(quota={self.quota})'
+     ```
+     
+     桶被填充后，每次消费者想要使用配额，都需要检查是否能扣除所需的配额量。以下是`fill`和`deduct`函数的代码：
+
+     ```python
+     def fill(bucket, amount):
+         now = datetime.now()
+         if (now - bucket.reset_time) > bucket.period_delta:
+             bucket.quota = 0
+             bucket.reset_time = now
+         bucket.quota += amount
+     
+     def deduct(bucket, amount):
+         now = datetime.now()
+         if (now - bucket.reset_time) > bucket.period_delta:
+             return False  # Bucket hasn't been filled this period
+         if bucket.quota - amount < 0:
+             return False  # Bucket was filled, but not enough
+         bucket.quota -= amount
+         return True  # Bucket had enough, quota consumed
+     ```
+     
+     应用示例:
+
+     ```python
+     bucket = Bucket(60)
+     fill(bucket, 100)
+     print(bucket)  # Output: Bucket(quota=100)
+     
+     if deduct(bucket, 99):
+         print('Had 99 quota')
+     else:
+         print('Not enough for 99 quota')
+     print(bucket)  # Output: Bucket(quota=1)
+     
+     if deduct(bucket, 3):
+         print('Had 3 quota')
+     else:
+         print('Not enough for 3 quota')
+     print(bucket)  # Output: Bucket(quota=1)
+     ```
+
+   - **通过@property解决Bucket类的问题**
+
+     为了解决上述问题，作者提出了一个新的Bucket类，该类引入了两个新的属性：`max_quota`和`quota_consumed`。
+
+     ```python
+     class NewBucket:
+         def __init__(self, period):
+             self.period_delta = timedelta(seconds=period)
+             self.reset_time = datetime.now()
+             self.max_quota = 0
+             self.quota_consumed = 0
+     
+         def __repr__(self):
+             return (f'NewBucket(max_quota={self.max_quota}, '
+                     f'quota_consumed={self.quota_consumed})')
+     
+         @property
+         def quota(self):
+             return self.max_quota - self.quota_consumed
+     
+         @quota.setter
+         def quota(self, amount):
+             delta = self.max_quota - amount
+             if amount == 0:
+                 self.quota_consumed = 0
+                 self.max_quota = 0
+             elif delta < 0:
+                 assert self.quota_consumed == 0
+                 self.max_quota = amount
+             else:
+                 assert self.max_quota >= self.quota_consumed
+                 self.quota_consumed += delta
+     ```
+     
+     应用示例：
+
+     ```python
+     bucket = NewBucket(60)
+     print('Initial', bucket)  # Output: Initial NewBucket(max_quota=0, quota_consumed=0)
+     fill(bucket, 100)
+     print('Filled', bucket)  # Output: Filled NewBucket(max_quota=100, quota_consumed=0)
+     
+     if deduct(bucket, 99):
+         print('Had 99 quota')
+     else:
+         print('Not enough for 99 quota')
+     print('Now', bucket)  # Output: Now NewBucket(max_quota=100, quota_consumed=99)
+     
+     if deduct(bucket, 3):
+         print('Had 3 quota')
+     else:
+         print('Not enough for 3 quota')
+     print('Still', bucket)  # Output: Still NewBucket(max_quota=100, quota_consumed=99)
+     ```
+
+3. **方法应用场景及应用原因总结**
+
+   - **应用原因**
+
+     使用@property的原因是，你可以在不修改调用方代码的情况下，对类的内部实现进行改变。这对于API的向后兼容性和代码的可维护性来说非常有用。特别是当你想给一个原本是简单数据的属性添加更复杂的行为时，@property是一个很有用的工具。
+
+   - **应用场景**
+
+     @property广泛应用于各种场景中，包括：
+
+     1. 当你需要对属性值进行验证时。例如，如果你有一个`Person`类，其`age`属性必须在0到120之间，你可以使用@property来实现这个验证。
+     2. 当你需要属性的值依赖于其他属性时。例如，你有一个`Rectangle`类，它有`width`和`height`属性，你可以使用@property来计算它的`area`。
+     3. 当你需要在获取或设置属性时执行一些额外的操作时，如日志记录、事件触发等。
+
+### Item 46: Use Descriptors for Reusable aproperty Methods
+
+1. 段落摘要总结:
+   
+   本段内容是讲解Python的描述符(descriptor)如何用于重用@property方法，以实现属性的验证和行为的重复使用。初始的实现是在类中使用@property装饰器来设置和获取属性，并在设置属性时进行验证。然后作者通过示例指出这样做的问题，即无法重用验证代码，无法应用到不同的属性和不同的类。于是，作者引入了描述符，提供了__get__和__set__方法来实现属性的设置和获取，并在设置时进行验证。通过创建描述符类Grade，可以重用属性验证行为。但是，这个实现会有内存泄露的问题，因为描述符对象持有所有已设置过的对象的引用，导致它们无法被垃圾回收。最后，作者使用weakref模块中的WeakKeyDictionary解决了这个问题。WeakKeyDictionary会在Python运行时知道它持有对象的最后一个引用时，将对象从其项目集中移除。
+
+2. 代码示例及解释:
+   以下是一些用于理解这个概念的代码示例，以及它们的输出。
+
+① 用@property实现属性验证:
+```python
+class Homework:
+ def __init__(self):
+     self._grade = 0
+
+ @property
+ def grade(self):
+     return self._grade
+
+ @grade.setter
+ def grade(self, value):
+     if not (0 <= value <= 100):
+         raise ValueError('Grade must be between 0 and 100')
+     self._grade = value
+
+galileo = Homework()
+galileo.grade = 95
+print(galileo.grade)  # 输出：95
+```
+代码中的`@property`装饰器使得我们可以在设置`grade`属性的时候进行一些操作，如此例中的数值检查。
+
+② 使用描述符重用属性验证:
+```python
+class Grade:
+    def __init__(self):
+        self._value = 0
+
+    def __get__(self, instance, instance_type):
+        return self._value
+
+    def __set__(self, instance, value):
+        if not (0 <= value <= 100):
+            raise ValueError('Grade must be between 0 and 100')
+        self._value = value
+
+class Exam:
+    math_grade = Grade()
+    writing_grade = Grade()
+    science_grade = Grade()
+
+first_exam = Exam()
+first_exam.writing_grade = 82
+print(first_exam.writing_grade)  # 输出：82
+```
+这个例子使用描述符`Grade`重用属性验证行为，描述符提供了`__get__`和`__set__`方法来实现属性的设置和获取，并在设置时进行验证。
+
+③ 使用WeakKeyDictionary解决内存泄露问题:
+```python
+from weakref import WeakKeyDictionary
+
+class Grade:
+    def __init__(self):
+        self._values = WeakKeyDictionary()
+
+    def __get__(self, instance, instance_type):
+        return self._values.get(instance, 0)
+
+    def __set__(self, instance, value):
+        if not (0 <= value <= 100):
+            raise ValueError('Grade must be between 0 and 100')
+        self._values[instance] = value
+
+class Exam:
+    math_grade = Grade()
+    writing_grade = Grade()
+    science_grade = Grade()
+
+first_exam = Exam()
+first_exam.writing_grade = 82
+
+second_exam = Exam()
+second_exam.writing_grade = 75
+
+print(first_exam.writing_grade)  # 输出：82
+print(second_exam.writing_grade)  # 输出：75
+```
+这个例子使用`WeakKeyDictionary`解决了内存泄漏问题，`WeakKeyDictionary`会在Python运行时知道它持有对象的最后一个引用时，将对象从其项目集中移除。
+
+3. 应用场景及应用原因总结:
+
+   ① 应用原因:
+   使用描述符可以更有效地重用属性的验证和行为，避免重复编写相同的代码，提高代码的可维护性。并且，使用WeakKeyDictionary可以避免因为描述符对象持有所有已设置过的对象的引用，导致的内存泄露问题。
+
+   ② 应用场景:
+   - 在需要对设置的属性进行验证的场景下，如设置学生的成绩，需要验证成绩在0到100之间；
+   - 在需要将相同的属性行为应用到多个属性或多个类的场景下，如多个科目的成绩都需要进行相同的验证；
+   - 在需要避免内存泄露的场景下，如在长时间运行的程序中，频繁地创建和删除对象，需要避免内存泄露。
+
+4. 实用代码段:
+
+```python
+from weakref import WeakKeyDictionary
+
+class Grade:
+    def __init__(self):
+        self._values = WeakKeyDictionary()
+
+    def __get__(self, instance, instance_type):
+        return self._values.get(instance, 0)
+
+    def __set__(self, instance, value):
+        if not (0 <= value <= 100):
+            raise ValueError('Grade must be between 0 and 100')
+        self._values[instance] = value
+
+class Exam:
+    math_grade = Grade()
+    writing_grade = Grade()
+    science_grade = Grade()
+
+first_exam = Exam()
+first_exam.writing_grade = 82
+
+second_exam = Exam()
+second_exam.writing_grade = 75
+
+print(first_exam.writing_grade)  # 输出：82
+print(second_exam.writing_grade)  # 输出：75
+```
+这个代码段演示了如何使用描述符进行属性的验证和行为的重复使用，并通过WeakKeyDictionary避免内存泄露。
+
+### Item 47: Use `__getattr__, __getattribute__, and __setattr__` for Lazy Attributes
+
+1. 段落摘要总结:
+    这段文字详细介绍了Python的几个特殊方法, 如`__getattr__`, `__getattribute__`, 和 `__setattr__`，它们是如何用于Python中的惰性属性处理。`__getattr__`只有在属性不存在的情况下才会被调用，用于实现属性的动态绑定。`__getattribute__`不同，它会在每次属性访问时都被调用，允许在每次属性访问时执行更多的操作，如校验数据有效性。__setattr__也总是在属性被赋值时调用，可以用于拦截属性的赋值。需要注意的是，当在这些方法中访问其他属性时，必须使用`super()`，以避免无限递归。
+
+2. 根据段落行文逻辑, 并给我代码来帮我进行理解: 
+
+    (i) 使用__getattr__进行惰性属性绑定：
+
+    ```python
+    class LazyRecord:
+        def __init__(self):
+            self.exists = 5
+
+        def __getattr__(self, name):
+            value = f'Value for {name}'
+            setattr(self, name, value)
+            return value
+
+    data = LazyRecord()
+    print('Before:', data.__dict__)
+    print('foo: ', data.foo)
+    print('After: ', data.__dict__)
+    ```
+
+    输出：
+
+    ```
+    Before: {'exists': 5}
+    foo: Value for foo
+    After: {'exists': 5, 'foo': 'Value for foo'}
+    ```
+
+    (ii) 使用__getattribute__在每次属性访问时进行更多的操作：
+
+    ```python
+    class ValidatingRecord:
+        def __init__(self):
+            self.exists = 5
+
+        def __getattribute__(self, name):
+            try:
+                value = super().__getattribute__(name)
+                print(f'* Found {name!r}, returning {value!r}')
+                return value
+            except AttributeError:
+                value = f'Value for {name}'
+                print(f'* Setting {name!r} to {value!r}')
+                setattr(self, name, value)
+                return value
+
+    data = ValidatingRecord()
+    print('exists: ', data.exists)
+    print('First foo: ', data.foo)
+    print('Second foo: ', data.foo)
+    ```
+
+    输出：
+
+    ```
+    * Found 'exists', returning 5
+    exists: 5
+    * Setting 'foo' to 'Value for foo'
+    First foo: Value for foo
+    * Found 'foo', returning 'Value for foo'
+    Second foo: Value for foo
+    ```
+
+    (iii) 使用__setattr__拦截属性的赋值：
+
+    ```python
+    class SavingRecord:
+        def __setattr__(self, name, value):
+            # Save some data for the record
+            super().__setattr__(name, value)
+
+    data = SavingRecord()
+    print('Before: ', data.__dict__)
+    data.foo = 5
+    print('After: ', data.__dict__)
+    data.foo = 7
+    print('Finally:', data.__dict__)
+    ```
+
+    输出：
+
+    ```
+    Before: {}
+    After: {'foo': 5}
+    Finally: {'foo': 7}
+    ```
+
+3. 给我这个方法应用场景及应用原因总结:
+
+    ① 应用的原因：这些特殊方法允许开发者在访问和修改属性时执行一些自定义操作，如动态绑定、数据校验和数据存储等。
+
+    ② 常见应用场景例子：
+       - 对象关系映射(ORM)：可以通过__getattr__实现字段的动态绑定，通过__setattr__拦截字段的赋值并同步到数据库。
+       - 数据校验：在每次访问属性时，通过__getattribute__对数据进行校验。
+       - 懒加载：对一些计算量大或需要从远程获取的属性，可以使用__getattr__实现懒加载。
+
+4. 给我实用代码段:
+
+    ```python
+    class LazyDBRecord:
+        def __init__(self, db_conn, record_id):
+            self._db_conn = db_conn
+            self._record_id = record_id
+    
+        def __getattr__(self, name):
+            value = self._db_conn.fetch(self._record_id, name)
+            setattr(self, name, value)
+            return value
+    
+        def __setattr__(self, name, value):
+            self._db_conn.save(self._record_id, name, value)
+            super().__setattr__(name, value)
+    
+    # 示例代码, 模拟数据库连接
+    class MockDBConn:
+        def __init__(self):
+            self.data = {
+                1: {"name": "Alice", "age": 25},
+                2: {"name": "Bob", "age": 30}
+            }
+    
+        def fetch(self, record_id, field):
+            return self.data[record_id][field]
+    
+        def save(self, record_id, field, value):
+            self.data[record_id][field] = value
+    
+    db_conn = MockDBConn()
+    record = LazyDBRecord(db_conn, 1)
+    print('name:', record.name)  # 实际上会去数据库中查询
+    print('age:', record.age)  # 实际上会去数据库中查询
+    record.age = 26  # 实际上会去数据库中保存
+    print('age:', record.age)  # 不需要查询，直接返回
+    ```
+
+### Item 48: Validate Subclasses with _ init_subclass_
+
+1. 段落摘要总结:
+
+   这个段落讨论了Python类定义过程中的验证和元类的使用，详细说明了使用元类来进行子类验证的方法，并展示了其存在的问题。在解决这些问题时，它引入了Python 3.6中的一个特性，`__init_subclass__`方法，用于在子类定义时进行验证。这个段落还讨论了`__init_subclass__`和元类相比的优势，包括更简单的代码、更好的错误提示、和更强大的功能（如处理多重继承和混合）。
+
+2. 代码段：
+
+   以下是这个段落中出现的主要代码段，并用PEP8格式修改了排版。同时，还包括了一些输出示例以帮助理解。
+
+   ```python
+   # 早期的使用元类进行子类验证的方法
+   class Meta(type):
+       def __new__(meta, name, bases, class_dict):
+           print(f'* Running {meta}.__new__ for {name}')
+           print('Bases:', bases)
+           print(class_dict)
+           return type.__new__(meta, name, bases, class_dict)
+
+   class MyClass(metaclass=Meta):
+       stuff = 123
+
+       def foo(self):
+           pass
+
+   class MySubclass(MyClass):
+       other = 567
+
+       def bar(self):
+           pass
+
+   # 输出:
+   # * Running <class '__main__.Meta'>.__new__ for MyClass
+   # Bases: ()
+   # {'__module__': '__main__', '__qualname__': 'MyClass', 'stuff': 123, 'foo': <function MyClass.foo at 0x105a05280>}
+   # * Running <class '__main__.Meta'>.__new__ for MySubclass
+   # Bases: (<class '__main__.MyClass'>,)
+   # {'__module__': '__main__', '__qualname__': 'MySubclass', 'other': 567, 'bar': <function MySubclass.bar at 0x105a05310>}
+   
+   # 使用__init_subclass__进行子类验证的方法
+   class BetterPolygon:
+       sides = None  # Must be specified by subclasses
+
+       def __init_subclass__(cls):
+           super().__init_subclass__()
+           if cls.sides < 3:
+               raise ValueError('Polygons need 3+ sides')
+
+       @classmethod
+       def interior_angles(cls):
+           return (cls.sides - 2) * 180
+
+   class Hexagon(BetterPolygon):
+       sides = 6
+
+   # 输出:
+   # assert Hexagon.interior_angles() == 720
+   ```
+
+3. 应用场景及应用原因总结:
+
+   应用原因:
+
+   `__init_subclass__`特性在子类定义时提供了一个运行点，允许我们在类定义时检查和修改类。这样我们可以确保每个子类都遵循某些约定或者满足某些条件。
+
+   应用场景:
+
+   - 在创建一个复杂的类层次结构时，我们可能想要对子类进行一些限制，如需要它们覆盖某些方法、或者需要它们具有某些特定的属性。这种情况下，我们可以使用`__init_subclass__`进行验证。
+   - 当我们希望子类在继承时有某种特定的行为，如注册自己、或者修改自己的某些属性。这种情况下，`__init_subclass__`可以作为一个钩子，执行我们想要的代码。
+
+4. 实用代码段:
+
+   ```python
+   class BetterPolygon:
+       sides = None  # Must be specified by subclasses
+   
+       def __init_subclass__(cls):
+           super().__init_subclass__()
+           if cls.sides < 3:
+               raise ValueError('Polygons need 3+ sides')
+   
+       @classmethod
+       def interior_angles(cls):
+           return (cls.sides - 2) * 180
+   
+   class Hexagon(BetterPolygon):
+       sides = 6
+   
+   assert Hexagon.interior_angles() == 720
+   ```
+
+### Item 49: Register Class Existence with `_ init_subclass_`
+
+### Item 50: Annotate Class Attributes with `__set_name_`
+### Item 51: Prefer Class Decorators Over Metaclasses forComposable Class Extensions
 
 ## Chapter Ⅶ: Concurrency and Parallelism
 
